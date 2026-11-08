@@ -262,6 +262,7 @@ local function isKillPart(part)
     return false
 end
 
+-- 🌟 ALMA MODERNA, PEQUENA, COM PARTÍCULAS OVALADAS E BUSCA ATIVA DO InvCube
 local function playDestructionEffect(originalPart)
     if not originalPart or not originalPart:IsA("BasePart") then return end
     task.spawn(function()
@@ -280,8 +281,9 @@ local function playDestructionEffect(originalPart)
         clone.Color = getClassicSphereColor()
         clone.Transparency = 0.5
 
+        -- Limpar texturas anteriores para virar uma esfera moderna
         for _, child in ipairs(clone:GetChildren()) do
-            if child:IsA("Texture") or child:IsA("Decal") or child:IsA("Trail") then
+            if child:IsA("Texture") or child:IsA("Decal") or child:IsA("Trail") or child:IsA("ParticleEmitter") then
                 child:Destroy()
             elseif child:IsA("SpecialMesh") then
                 child.TextureId = ""
@@ -292,67 +294,60 @@ local function playDestructionEffect(originalPart)
         end
         if clone:IsA("MeshPart") then clone.TextureID = "" end
 
+        -- Definir tamanho inicial pequeno e compacto
+        clone.Size = Vector3_new(1.2, 1.2, 1.2)
         clone.Parent = workspace
-        local startCFrame = originalPart.CFrame
-        clone.CFrame = startCFrame
+        
+        local currentCFrame = originalPart.CFrame
+        clone.CFrame = currentCFrame
 
+        -- Adicionar ParticleEmitter moderno na alma
+        local particle = Instance.new("ParticleEmitter")
+        particle.Color = ColorSequence.new(clone.Color)
+        particle.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 0)})
+        particle.Texture = "rbxassetid://258129712" -- Partícula brilhante padrão moderna
+        particle.Lifetime = NumberRange.new(0.3, 0.6)
+        particle.Rate = 35
+        particle.Speed = NumberRange.new(1, 3)
+        particle.SpreadAngle = Vector2.new(360, 360)
+        particle.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1)})
+        particle.Parent = clone
+
+        -- 1. Flutuação inicial na parte morta por 1 segundo
         local hoverStart = tick()
         while tick() - hoverStart < 1.0 do
             if not clone or not clone.Parent then return end
             local elapsed = tick() - hoverStart
-            clone.CFrame = startCFrame + Vector3_new(0, math.sin(elapsed * 6) * 0.3, 0)
+            clone.CFrame = currentCFrame + Vector3_new(0, math.sin(elapsed * 6) * 0.3, 0)
             task.wait()
         end
 
-        local invCube = workspace:FindFirstChild("InvCube", true) or char:FindFirstChild("InvCube", true)
-        local targetPos = invCube and invCube.Position or (startCFrame.Position + Vector3_new(0, 15, 0))
+        -- 2. Busca ativa e perseguição suave pelo InvCube até chegar nele
+        while clone and clone.Parent do
+            local invCube = workspace:FindFirstChild("InvCube", true) or char:FindFirstChild("InvCube", true)
+            if not invCube then break end
 
-        local travelTime = 1.8
-        local travelStart = tick()
-        local baseSize = clone.Size.Magnitude > 0 and clone.Size or Vector3_new(2, 2, 2)
+            local targetPos = invCube.Position
+            local currentPos = clone.Position
+            local distance = (targetPos - currentPos).Magnitude
 
-        while tick() - travelStart < travelTime do
-            if not clone or not clone.Parent then return end
-            local alpha = (tick() - travelStart) / travelTime
-            alpha = math.clamp(alpha, 0, 1)
-
-            local currentPos = startCFrame.Position:Lerp(targetPos, alpha)
-            
-            if (targetPos - currentPos).Magnitude > 0.1 then
-                clone.CFrame = CFrame.new(currentPos, targetPos) * CFrame_Angles(math.pi/2, 0, 0)
-            else
-                clone.CFrame = CFrame.new(currentPos)
+            -- Se chegou perto o suficiente do InvCube, absorve/destrói
+            if distance < 2.5 then
+                break
             end
 
-            local stretch = 1 + (math.sin(alpha * math.pi) * 1.8)
-            clone.Size = Vector3_new(baseSize.X * 0.7, baseSize.Y * (2.0 * stretch), baseSize.Z * 0.7)
+            -- Movimento suave em direção ao cubo (Velocidade adaptativa)
+            local speed = 35
+            local step = math.min(distance, speed * task.wait())
+            local newPos = currentPos:Lerp(targetPos, step / distance)
 
-            if math_random(1, 2) == 1 then
-                task.spawn(function()
-                    local trailPart = Instance.new("Part")
-                    trailPart.Shape = Enum.PartType.Ball
-                    trailPart.Size = Vector3_new(baseSize.X * 0.4, baseSize.Y * 0.4, baseSize.Z * 0.4)
-                    trailPart.CFrame = clone.CFrame
-                    trailPart.Anchored = true
-                    trailPart.CanCollide = false
-                    trailPart.CanQuery = false
-                    trailPart.Material = Enum.Material.Neon
-                    trailPart.Color = clone.Color
-                    trailPart.Transparency = 0.5
-                    trailPart.Parent = workspace
+            -- Orientar e esticar a alma em formato oval para onde está se movendo
+            local lookCF = CFrame.new(newPos, targetPos) * CFrame_Angles(math.pi/2, 0, 0)
+            clone.CFrame = lookCF
 
-                    local tTween = TweenService:Create(trailPart, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                        Transparency = 1,
-                        Size = Vector3_new(0.1, 0.1, 0.1)
-                    })
-                    tTween:Play()
-                    tTween.Completed:Connect(function()
-                        if trailPart and trailPart.Parent then trailPart:Destroy() end
-                    end)
-                end)
-            end
-
-            task.wait()
+            -- Estiramento oval dinâmico com base na velocidade/distância
+            local stretchFactor = math.clamp(distance * 0.08, 1.2, 2.2)
+            clone.Size = Vector3_new(1.0, 1.0 * stretchFactor, 1.0)
         end
 
         if clone and clone.Parent then
