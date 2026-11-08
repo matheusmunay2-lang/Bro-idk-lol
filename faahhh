@@ -182,14 +182,6 @@ local function getActiveCustomTexture(partName)
     return ""
 end
 
-local function getClassicSphereColor()
-    local sphere = char:FindFirstChild("ClassicSphere") or workspace:FindFirstChild("ClassicSphere")
-    if sphere and sphere:IsA("BasePart") then
-        return sphere.Color
-    end
-    return Color3.fromRGB(255, 255, 255)
-end
-
 task.spawn(function()
     pcall(function()
         StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
@@ -236,8 +228,8 @@ end
 
 local function isProjectileEffect(part)
     if not part or not part:IsA("BasePart") then return false end
-    val = part.Name:lower()
-    if val:find("shoot") or val:find("shootsphere") or val:find("cyl") or val:find("bullet") or val:find("fx") or val:find("laser") or val:find("ray") or val:find("beam") or val:find("tracer") or val:find("tiro") or val:find("projetil") or isSFXPart(part) then
+    local name = part.Name:lower()
+    if name:find("shoot") or name:find("shootsphere") or name:find("cyl") or name:find("bullet") or name:find("fx") or name:find("laser") or name:find("ray") or name:find("beam") or name:find("tracer") or name:find("tiro") or name:find("projetil") or isSFXPart(part) then
         return true
     end
     local sm = part:FindFirstChildOfClass("SpecialMesh")
@@ -262,101 +254,45 @@ local function isKillPart(part)
     return false
 end
 
--- 🌟 ANIMAÇÃO DA SOUL MODERNA: Transição perfeita, partículas dinâmicas e perseguição ativa do InvCube
 local function playDestructionEffect(originalPart)
     if not originalPart or not originalPart:IsA("BasePart") then return end
     task.spawn(function()
         local clone = originalPart:Clone()
         if not clone then return end
-        
-        if clone:IsA("Part") then
-            clone.Shape = Enum.PartType.Ball
-        end
-        
-        clone.Anchored = true
+        clone.Anchored = false
         clone.CanCollide = false
         clone.CanQuery = false
         clone.Massless = true
-        clone.Material = Enum.Material.Neon
-        clone.Color = getClassicSphereColor()
-        clone.Transparency = 0.5
-
+        local startTrans = math.clamp(originalPart.Transparency, 0, 0.5)
+        clone.Transparency = startTrans
+        clone.Color = originalPart.Color
         for _, child in ipairs(clone:GetChildren()) do
-            if child:IsA("Texture") or child:IsA("Decal") or child:IsA("Trail") or child:IsA("ParticleEmitter") then
+            if child:IsA("Texture") or child:IsA("Decal") then
                 child:Destroy()
             elseif child:IsA("SpecialMesh") then
                 child.TextureId = ""
-                child.MeshType = Enum.MeshType.Sphere
             elseif child:IsA("MeshPart") then
                 clone.TextureID = ""
             end
         end
         if clone:IsA("MeshPart") then clone.TextureID = "" end
-
-        local startCFrame = originalPart.CFrame
-        clone.CFrame = startCFrame
         clone.Parent = workspace
-
-        -- Transição suave encolhendo para uma esfera moderna compacta
-        local shrinkTween = TweenService:Create(clone, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Size = Vector3_new(1.2, 1.2, 1.2)
+        local targetCFrame = clone.CFrame * CFrame_new(math_random(-12, 12), math_random(4, 18), math_random(-12, 12)) * CFrame_Angles(math_rad(math_random(-360, 360)), math_rad(math_random(-360, 360)), math_rad(math_random(-360, 360)))
+        local deformedSize = Vector3_new(
+            clone.Size.X * (math_random(15, 300) / 100),
+            clone.Size.Y * (math_random(10, 50) / 100),
+            clone.Size.Z * (math_random(20, 250) / 100)
+        )
+        local tweenInfo = TweenInfo.new(1.8, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(clone, tweenInfo, {
+            CFrame = targetCFrame,
+            Transparency = 1,
+            Size = deformedSize
         })
-        shrinkTween:Play()
-        shrinkTween.Completed:Wait()
-
-        -- Partículas modernas acompanhando a soul
-        local particle = Instance.new("ParticleEmitter")
-        particle.Color = ColorSequence.new(clone.Color)
-        particle.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 0)})
-        particle.Texture = "rbxassetid://258129712"
-        particle.Lifetime = NumberRange.new(0.3, 0.6)
-        particle.Rate = 50
-        particle.Speed = NumberRange.new(2, 4)
-        particle.SpreadAngle = Vector2.new(360, 360)
-        particle.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1)})
-        particle.Parent = clone
-
-        -- 1. Flutuação inicial no local por 1 segundo
-        local hoverStart = tick()
-        while tick() - hoverStart < 1.0 do
-            if not clone or not clone.Parent then return end
-            local elapsed = tick() - hoverStart
-            clone.CFrame = startCFrame + Vector3_new(0, math.sin(elapsed * 6) * 0.4, 0)
-            task.wait()
-        end
-
-        -- 2. Perseguição ativa, suave e orientada em oval buscando o InvCube
-        while clone and clone.Parent do
-            local invCube = workspace:FindFirstChild("InvCube", true) or char:FindFirstChild("InvCube", true)
-            if not invCube then
-                task.wait()
-                continue
-            end
-
-            local targetPos = invCube.Position
-            local currentPos = clone.Position
-            local distance = (targetPos - currentPos).Magnitude
-
-            if distance < 2.0 then
-                break
-            end
-
-            local speed = 45
-            local dt = RS.Heartbeat:Wait()
-            local step = math.min(distance, speed * dt)
-            local newPos = currentPos:Lerp(targetPos, step / distance)
-
-            -- Orientar e esticar a alma em formato oval para a direção do movimento
-            local lookCF = CFrame.new(newPos, targetPos) * CFrame_Angles(math.pi/2, 0, 0)
-            clone.CFrame = lookCF
-
-            local stretch = math.clamp(distance * 0.05, 1.2, 2.5)
-            clone.Size = Vector3_new(1.0, 1.2 * stretch, 1.0)
-        end
-
-        if clone and clone.Parent then
-            clone:Destroy()
-        end
+        tween:Play()
+        tween.Completed:Connect(function()
+            if clone and clone.Parent then clone:Destroy() end
+        end)
     end)
 end
 
@@ -734,6 +670,7 @@ local function initCharacterAttachments()
         end
     end)
 
+    -- Head Mesh Part
     task.spawn(function()
         local head = char:WaitForChild("Head", 5)
         if head then
@@ -756,6 +693,7 @@ local function initCharacterAttachments()
         end
     end)
 
+    -- Neck Mesh Part
     task.spawn(function()
         local torso = char:WaitForChild("UpperTorso", 5) or char:WaitForChild("Torso", 5) or char:WaitForChild("Head", 5)
         if torso then
@@ -778,6 +716,7 @@ local function initCharacterAttachments()
         end
     end)
 
+    -- CubeOutline / Visualizer Weld
     task.spawn(function()
         local function setupVisualizerWeld()
             local invCube = char:WaitForChild("InvCube", 3) or workspace:WaitForChild("InvCube", 3) or char:WaitForChild("CubeOutline", 3) or workspace:WaitForChild("CubeOutline", 3)
@@ -831,7 +770,7 @@ local function isStandingOnBaseplate(hrp)
     return false
 end
 
-function processHit(hit, sourcePart)
+local function processHit(hit, sourcePart)
     if damageState == "Disabled" or not hit or not hit:IsA("BasePart") then return end
     if not sourcePart or not isKillPart(sourcePart) then return end
     if hit:IsDescendantOf(char) or isProjectileEffect(hit) then return end
@@ -868,30 +807,15 @@ function processHit(hit, sourcePart)
             pcall(function()
                 local newHealth = math.max(0, victimHumanoid.Health - CUSTOM_DAMAGE)
                 if newHealth <= 0 then
-                    local allParts = {}
+                    local partsToDelete = {}
                     for _, p in ipairs(victimModel:GetDescendants()) do
-                        if p:IsA("BasePart") and not isProjectileEffect(p) then
-                            table.insert(allParts, p)
+                        if p:IsA("BasePart") then
+                            table.insert(partsToDelete, p)
+                            if not isProjectileEffect(p) then
+                                playDestructionEffect(p)
+                            end
                         end
                     end
-                    
-                    local partsToDelete = {}
-                    local selectedParts = {}
-                    for i = 1, math.min(3, #allParts) do
-                        local randIdx = math_random(1, #allParts)
-                        local chosenPart = table.remove(allParts, randIdx)
-                        table.insert(selectedParts, chosenPart)
-                        table.insert(partsToDelete, chosenPart)
-                    end
-
-                    for _, p in ipairs(selectedParts) do
-                        playDestructionEffect(p)
-                    end
-
-                    for _, p in ipairs(allParts) do
-                        table.insert(partsToDelete, p)
-                    end
-
                     pcall(function()
                         if Remote then Remote:InvokeServer("Remove", partsToDelete) end
                     end)
@@ -907,7 +831,6 @@ function processHit(hit, sourcePart)
     else
         if damageState == "PlayerDamage" then return end
         hit:SetAttribute("F3X_Destroying", true)
-        
         playDestructionEffect(hit)
 
         local meshInfo = hit:FindFirstChildOfClass("SpecialMesh")
@@ -985,6 +908,7 @@ end)
 LP.Chatted:Connect(function(msg)
     local msgLower = msg:lower()
 
+    -- 1. setting/end -> deletes all tracked meshes and server parts
     if msgLower == "setting/end" then
         scriptActive = false
         local removes = {}
@@ -1004,6 +928,7 @@ LP.Chatted:Connect(function(msg)
         return
     end
 
+    -- 2. purge/"targetname" -> deletes any item/tool of the player matching targetname
     if msgLower:sub(1, 6) == "purge/" then
         local targetName = msg:sub(7):gsub('"', ''):gsub("'", ""):lower()
         local countDeleted = 0
@@ -1028,30 +953,15 @@ LP.Chatted:Connect(function(msg)
 end)
 
 UIS.InputBegan:Connect(function(input, gpe)
-    local noEquipKeys = {
-        [Enum.KeyCode.Two] = true, [Enum.KeyCode.KeypadTwo] = true,
-        [Enum.KeyCode.Four] = true, [Enum.KeyCode.KeypadFour] = true,
-        [Enum.KeyCode.Five] = true, [Enum.KeyCode.KeypadFive] = true,
-        [Enum.KeyCode.Six] = true, [Enum.KeyCode.KeypadSix] = true,
-        [Enum.KeyCode.Seven] = true, [Enum.KeyCode.KeypadSeven] = true,
-    }
-
-    if noEquipKeys[input.KeyCode] then
-        local tool = char:FindFirstChildOfClass("Tool")
-        if tool then
-            tool.Parent = LP.Backpack
-        end
-    end
-
     local blockedKeys = {
-        Enum.KeyCode.Two, Enum.KeyCode.Four, Enum.KeyCode.Five, Enum.KeyCode.Six, Enum.KeyCode.Seven,
-        Enum.KeyCode.KeypadTwo, Enum.KeyCode.KeypadFour, Enum.KeyCode.KeypadFive, Enum.KeyCode.KeypadSix, Enum.KeyCode.KeypadSeven
+        Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four, Enum.KeyCode.Five,
+        Enum.KeyCode.Six, Enum.KeyCode.Seven, Enum.KeyCode.Eight, Enum.KeyCode.Nine, Enum.KeyCode.Zero,
+        Enum.KeyCode.KeypadOne, Enum.KeyCode.KeypadTwo, Enum.KeyCode.KeypadThree, Enum.KeyCode.KeypadFour, Enum.KeyCode.KeypadFive,
+        Enum.KeyCode.KeypadSix, Enum.KeyCode.KeypadSeven, Enum.KeyCode.KeypadEight, Enum.KeyCode.KeypadNine, Enum.KeyCode.KeypadZero
     }
     for _, v in ipairs(blockedKeys) do
         if input.KeyCode == v then
-            if input.KeyCode ~= Enum.KeyCode.Six and input.KeyCode ~= Enum.KeyCode.Seven then 
-                return 
-            end
+            if input.KeyCode ~= Enum.KeyCode.Six then return end
         end
     end
 
@@ -1080,38 +990,41 @@ UIS.InputBegan:Connect(function(input, gpe)
                 swordLethal = false
             end)
         end
-    elseif input.KeyCode == Enum.KeyCode.Seven or input.KeyCode == Enum.KeyCode.KeypadSeven then
+    elseif input.KeyCode == Enum.KeyCode.Seven then
         if #destroyedHistory > 0 then
-            local restoredCount = #destroyedHistory
-            for _, lastData in ipairs(destroyedHistory) do
-                task.spawn(function()
-                    local targetParent = (lastData.Parent and lastData.Parent:IsDescendantOf(game)) and lastData.Parent or workspace
-                    local success, newPart = pcall(function()
-                        if Remote then return Remote:InvokeServer("CreatePart", lastData.Shape, lastData.CFrame, targetParent) end
-                    end)
-                    if success and newPart then
-                        pcall(function()
-                            Remote:InvokeServer("SyncName", {{Part = newPart, Name = generateRandomString()}})
-                            Remote:InvokeServer("SyncResize", {{Part = newPart, CFrame = lastData.CFrame, Size = lastData.Size}})
-                            Remote:InvokeServer("SyncColor", {{Part = newPart, Color = lastData.Color}})
-                            Remote:InvokeServer("SyncMaterial", {{Part = newPart, Material = lastData.Material, Transparency = lastData.Transparency}})
-                            Remote:InvokeServer("SyncProperty", {{Part = newPart, Property = "Reflectance", Value = lastData.Reflectance}})
-                            Remote:InvokeServer("SyncSurface", {{
-                                Part = newPart, Top = lastData.TopSurface, Bottom = lastData.BottomSurface,
-                                Left = lastData.LeftSurface, Right = lastData.RightSurface,
-                                Front = lastData.FrontSurface, Back = lastData.BackSurface
-                            }})
-                            Remote:InvokeServer("SyncAnchor", {{Part = newPart, Anchored = lastData.Anchored}})
-                            if lastData.MeshId and lastData.MeshId ~= "" then
-                                Remote:InvokeServer("CreateMeshes", {{Part = newPart}})
-                                Remote:InvokeServer("SyncMesh", {{Part = newPart, MeshType = lastData.MeshType, MeshId = lastData.MeshId, TextureId = lastData.TextureId or "", Scale = lastData.Scale}})
-                            end
+            while #destroyedHistory > 0 do
+                local lastData = table.remove(destroyedHistory)
+                local isOversizedScale = lastData.Scale.X > 15 or lastData.Scale.Y > 15 or lastData.Scale.Z > 15
+                local isOversizedPart = (lastData.Size.X > 20 and lastData.Size.Y < 2) or (lastData.Size.Z > 20 and lastData.Size.X < 2)
+                if not isOversizedScale and not isOversizedPart then
+                    task.spawn(function()
+                        local targetParent = (lastData.Parent and lastData.Parent:IsDescendantOf(game)) and lastData.Parent or workspace
+                        local success, newPart = pcall(function()
+                            if Remote then return Remote:InvokeServer("CreatePart", lastData.Shape, lastData.CFrame, targetParent) end
                         end)
-                    end
-                end)
+                        if success and newPart then
+                            pcall(function()
+                                Remote:InvokeServer("SyncName", {{Part = newPart, Name = generateRandomString()}})
+                                Remote:InvokeServer("SyncResize", {{Part = newPart, CFrame = lastData.CFrame, Size = lastData.Size}})
+                                Remote:InvokeServer("SyncColor", {{Part = newPart, Color = lastData.Color}})
+                                Remote:InvokeServer("SyncMaterial", {{Part = newPart, Material = lastData.Material, Transparency = lastData.Transparency}})
+                                Remote:InvokeServer("SyncProperty", {{Part = newPart, Property = "Reflectance", Value = lastData.Reflectance}})
+                                Remote:InvokeServer("SyncSurface", {{
+                                    Part = newPart, Top = lastData.TopSurface, Bottom = lastData.BottomSurface,
+                                    Left = lastData.LeftSurface, Right = lastData.RightSurface,
+                                    Front = lastData.FrontSurface, Back = lastData.BackSurface
+                                }})
+                                Remote:InvokeServer("SyncAnchor", {{Part = newPart, Anchored = lastData.Anchored}})
+                                if lastData.MeshId and lastData.MeshId ~= "" then
+                                    Remote:InvokeServer("CreateMeshes", {{Part = newPart}})
+                                    Remote:InvokeServer("SyncMesh", {{Part = newPart, MeshType = lastData.MeshType, MeshId = lastData.MeshId, TextureId = "", Scale = lastData.Scale}})
+                                end
+                            end)
+                        end
+                    end)
+                end
             end
-            destroyedHistory = {}
-            sendNotification("F3X System", restoredCount .. " partes recriadas perfeitamente! Histórico limpo.")
+            sendNotification("F3X System", "Peças normais recuperadas!")
         end
     end
 end)
@@ -1241,6 +1154,7 @@ RS.Heartbeat:Connect(function(dt)
     end)
 end)
 
+-- 🧬 SCRIPT 2 INTEGRATION: Character Respawn / Death Handling & Building Tools Refit Detection
 LP.CharacterAdded:Connect(function(newChar)
     char = newChar
     New = newChar
@@ -1249,8 +1163,10 @@ LP.CharacterAdded:Connect(function(newChar)
     pendingMirror = {}
     sfxKillingParts = {}
 
+    -- Re-acquire remote endpoint for the new character
     getRemote()
 
+    -- Listen for building tools being equipped or added (e.g. F3X building tools)
     local function setupToolListener(container)
         if not container then return end
         container.ChildAdded:Connect(function(child)
@@ -1258,6 +1174,7 @@ LP.CharacterAdded:Connect(function(newChar)
                 local nameLower = child.Name:lower()
                 if nameLower:find("building") or nameLower:find("f3x") or nameLower:find("tool") then
                     task.wait(0.5)
+                    -- Re-initialize character attachments and tracked parts (Refit / Reconstruct marked parts)
                     scriptActive = true
                     initCharacterAttachments()
                     registerContainerFast(char)
@@ -1270,6 +1187,7 @@ LP.CharacterAdded:Connect(function(newChar)
     setupToolListener(LP.Backpack)
     setupToolListener(char)
 
+    -- Initial delay for character parts loading
     task.spawn(function()
         task.wait(1)
         registerContainerFast(char)
