@@ -1,0 +1,1253 @@
+local RS = game:GetService("RunService")
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
+local math_random = math.random
+local math_rad = math.rad
+local Vector3_new = Vector3.new
+local CFrame_new = CFrame.new
+local CFrame_Angles = CFrame.Angles
+local LP = Players.LocalPlayer
+
+-- 🔄 SCRIPT 2 / REBUILD & REFIT STATE MANAGEMENT
+local char = LP.Character or LP.CharacterAdded:Wait()
+local New = char
+
+local function generateRandomString(length)
+    length = length or math_random(10, 18)
+    local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    local sb = {}
+    for i = 1, length do
+        local randIdx = math_random(1, #chars)
+        table.insert(sb, chars:sub(randIdx, randIdx))
+    end
+    return table.concat(sb)
+end
+
+-- 🌟 CONFIGURAÇÕES DA MESH NA CABEÇA (SEM COLISÃO) 🌟
+local HEAD_MESH_ID = "rbxassetid://18622481235"
+local HEAD_MESH_POS = Vector3_new(0, -0.2, 0.1)
+local HEAD_MESH_ROT = Vector3_new(-31, 45, 25)
+local HEAD_MESH_SIZE = Vector3_new(1.35, 1.06, 1.35)
+
+-- 🌟 CONFIGURAÇÕES DA MESH NO PESCOÇO (SEM COLISÃO) 🌟
+local NECK_MESH_ID = "rbxassetid://115354289962355"
+local NECK_MESH_POS = Vector3_new(0, 0.4, 0)
+local NECK_MESH_ROT = Vector3_new(0, -90, 0)
+local NECK_MESH_SIZE = Vector3_new(1, 1, 1)
+
+-- 🌟 IDS E CONFIGURAÇÕES DE TAMANHO PARA ARM IN E ARM OUT 🌟
+local ARM_IN_MESH_ID = "rbxassetid://84777529052646"
+local ARM_OUT_MESH_ID = "rbxassetid://95259563315476"
+local ARM_IN_VERTICAL_OFFSET = Vector3_new(0, -0.7, 0)
+local ARM_OUT_VERTICAL_OFFSET = Vector3_new(0, -0.7, 0)
+local ARM_IN_CUSTOM_SIZE = Vector3_new(1.34, 1.34, 1.34)
+local ARM_OUT_CUSTOM_SIZE = Vector3_new(1.34, 1.34, 1.34)
+
+local KITSUNE_DECAL_TEXTURE = "rbxassetid://103863954861858"
+
+local Remote = nil
+local function getRemote()
+    local timeout = tick() + 5
+    repeat
+        Remote = LP.Backpack:FindFirstChild("ServerEndpoint", true) or char:FindFirstChild("ServerEndpoint", true)
+        if not Remote then task.wait(0.02) end
+    until Remote or tick() > timeout
+    return Remote
+end
+getRemote()
+
+local CUSTOM_DAMAGE = 25
+local HIT_COOLDOWN = 0.5
+local trackedParts = {}
+local pendingMirror = {}
+local damageState = "Disabled"
+local swordLethal = false
+local destroyedHistory = {}
+local sfxKillingParts = {}
+local scriptActive = true
+
+local MALE_BLOCKY_TORSO = "rbxassetid://76316612146587"
+local FEMALE_BLOCKY_TORSO = "rbxassetid://48112070"
+local CUSTOM_TEXTURE = "rbxassetid://72946262882924"
+local TARGET_CUBE_MESH = "rbxassetid://133017770796749"
+local CUBE_OUTLINE_SCALE_MULTIPLIER = Vector3_new(0.55, 0.55, 0.55)
+
+-- 🎯 LISTA DE PARTES RASTREADAS E GERADAS (TRUE)
+local targetModelParts = {
+	["Gun"] = true,
+	["Barrel"] = true,
+	["GunGlow"] = true,
+	["Base"] = true,
+	["Glow"] = true,
+	["vinyl"] = true,
+    ["Vinyl"] = true,
+	["GunHole"] = true,
+	["ArmIn"] = true,
+	["ArmOut"] = true,
+	["RotBullets"] = true,
+	["ClassicSphere"] = true,
+	["ClassicBall"] = true,
+	["idk"] = true,
+	["cralv3"] = true,
+	["idiof"] = true,
+	["Sword"] = true,
+	["InvCube"] = true,
+    ["CubeOutline"] = true,
+	["F3X_VisualizerMeshGlobal"] = true,
+    ["F3X_VisualizedMeshGlobal"] = true,
+    ["HeadMeshPart"] = true,
+    ["NeckMeshPart"] = true,
+    ["LeftArmArmIn"] = true,
+    ["LeftArmArmOut"] = true,
+    ["LeftLegArmIn"] = true,
+    ["LeftLegArmOut"] = true,
+    ["RightLegArmIn"] = true,
+    ["RightLegArmOut"] = true,
+    ["Hit2"] = true,
+    ["Hit4"] = true,
+    ["Shoot"] = true,
+    ["FloorCyl"] = true,
+    ["Cyl"] = true,
+    ["FloorVisualizer"] = true,
+}
+
+local priorityParts = {
+    ["Base"] = true,
+    ["Glow"] = true,
+    ["RotBullets"] = true,
+    ["Gun"] = true,
+    ["GunGlow"] = true,
+    ["Barrel"] = true,
+    ["GunHole"] = true,
+    ["Sword"] = true,
+    ["InvCube"] = true,
+    ["CubeOutline"] = true,
+    ["F3X_VisualizerMeshGlobal"] = true,
+    ["F3X_VisualizedMeshGlobal"] = true,
+    ["HeadMeshPart"] = true,
+    ["NeckMeshPart"] = true,
+}
+
+local ignoredMeshParts = {
+    ["Hit"] = true,
+    ["Hit3"] = true,
+}
+
+local limbMeshes = {
+	["Torso"] = MALE_BLOCKY_TORSO,
+	["Head"] = "rbxassetid://5118118195",
+	["Right Arm"] = "rbxassetid://14866042817",
+	["Left Arm"] = "rbxassetid://12175198830",
+	["Right Leg"] = "rbxassetid://12175189266",
+	["Left Leg"] = "rbxassetid://12175153372",
+}
+
+local limbNames = {
+	["Head"] = true,
+	["Torso"] = true,
+	["Right Arm"] = true,
+	["Left Arm"] = true,
+	["Right Leg"] = true,
+	["Left Leg"] = true,
+	["UpperTorso"] = true,
+	["LowerTorso"] = true,
+}
+
+for name, _ in pairs(targetModelParts) do
+    limbNames[name] = true
+end
+
+local function hasKitsuneAccessory()
+    if not char then return false end
+    for _, v in ipairs(char:GetDescendants()) do
+        if v:IsA("Accessory") or v:IsA("Model") or v:IsA("MeshPart") then
+            local nameLower = v.Name:lower()
+            if nameLower:find("kitsune") or nameLower:find("fox") then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function getActiveCustomTexture(partName)
+    if partName == "Torso" or partName == "Right Arm" or partName == "Left Arm" or partName == "Right Leg" or partName == "Left Leg" then
+        if hasKitsuneAccessory() then
+            return KITSUNE_DECAL_TEXTURE
+        end
+        return CUSTOM_TEXTURE
+    end
+    return ""
+end
+
+local function getClassicSphereColor()
+    local sphere = char:FindFirstChild("ClassicSphere") or workspace:FindFirstChild("ClassicSphere")
+    if sphere and sphere:IsA("BasePart") then
+        return sphere.Color
+    end
+    return Color3.fromRGB(255, 255, 255)
+end
+
+task.spawn(function()
+    pcall(function()
+        StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+    end)
+end)
+
+local function sendNotification(title, text)
+    task.spawn(function()
+        pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = title,
+                Text = text,
+                Duration = 3,
+            })
+        end)
+    end)
+end
+
+local function isSFXPart(part)
+    if not part then return false end
+    if part:FindFirstAncestor("SFXFolder") ~= nil or part:FindFirstAncestor("DFXFolder") ~= nil or part:FindFirstAncestor("FXFolder") ~= nil or part:FindFirstAncestor("Effects") ~= nil or part:FindFirstAncestor("Debris") ~= nil or part:FindFirstAncestor("FloorVisualizer") ~= nil then
+        return true
+    end
+    local sfxFolder = workspace:FindFirstChild("SFXFolder")
+    if sfxFolder and part:IsDescendantOf(sfxFolder) then
+        if part:IsA("WedgePart") or part:IsA("Part") and (part.Shape == Enum.PartType.Ball or part.Shape == Enum.PartType.Cylinder) then
+            return true
+        end
+    end
+    return false
+end
+
+local function shouldBeNeon(part)
+    if not part then return false end
+    local nameLower = part.Name:lower()
+    if isSFXPart(part) or part:FindFirstAncestor("Effects") or part:FindFirstAncestor("SFXFolder") or part:FindFirstAncestor("FXFolder") or part:FindFirstAncestor("DFXFolder") then
+        return true
+    end
+    if nameLower == "classicball" or nameLower == "idiof" or nameLower == "cralv3" or nameLower == "classicsphere" or nameLower == "glow" or nameLower == "gunglow" or nameLower == "shoot" then
+        return true
+    end
+    return false
+end
+
+local function isProjectileEffect(part)
+    if not part or not part:IsA("BasePart") then return false end
+    local name = part.Name:lower()
+    if name:find("shoot") or name:find("shootsphere") or name:find("cyl") or name:find("bullet") or name:find("fx") or name:find("laser") or name:find("ray") or name:find("beam") or name:find("tracer") or name:find("tiro") or name:find("projetil") or isSFXPart(part) then
+        return true
+    end
+    local sm = part:FindFirstChildOfClass("SpecialMesh")
+    if sm then
+        local meshId = tostring(sm.MeshId):lower()
+        if meshId:find("shoot") then return true end
+    end
+    return false
+end
+
+local function isKillPart(part)
+    if not part or not part:IsA("BasePart") then return false end
+    local name = part.Name:lower()
+    if name:find("sword") or name:find("espada") or name:find("shoot") or name:find("shootsphere") or name:find("cyl") or name:find("hit2") or name:find("hit4") then
+        return true
+    end
+    local sm = part:FindFirstChildOfClass("SpecialMesh")
+    if sm then
+        local meshId = tostring(sm.MeshId):lower()
+        if meshId:find("shoot") or meshId:find("sword") then return true end
+    end
+    return false
+end
+
+local function playDestructionEffect(originalPart)
+    if not originalPart or not originalPart:IsA("BasePart") then return end
+    task.spawn(function()
+        local clone = originalPart:Clone()
+        if not clone then return end
+        
+        if clone:IsA("Part") then
+            clone.Shape = Enum.PartType.Ball
+        end
+        
+        clone.Anchored = false
+        clone.CanCollide = false
+        clone.CanQuery = false
+        clone.Massless = true
+        clone.Material = Enum.Material.Neon
+        clone.Color = getClassicSphereColor()
+        
+        local startTrans = math.clamp(originalPart.Transparency, 0, 0.5)
+        clone.Transparency = startTrans
+
+        for _, child in ipairs(clone:GetChildren()) do
+            if child:IsA("Texture") or child:IsA("Decal") then
+                child:Destroy()
+            elseif child:IsA("SpecialMesh") then
+                child.TextureId = ""
+                child.MeshType = Enum.MeshType.Sphere
+            elseif child:IsA("MeshPart") then
+                clone.TextureID = ""
+            end
+        end
+        if clone:IsA("MeshPart") then clone.TextureID = "" end
+
+        local att0 = Instance.new("Attachment", clone)
+        att0.Position = Vector3_new(0, 0, 0)
+        local att1 = Instance.new("Attachment", clone)
+        att1.Position = Vector3_new(0, -1.5, 0)
+
+        local trail = Instance.new("Trail")
+        trail.Attachment0 = att0
+        trail.Attachment1 = att1
+        trail.Color = ColorSequence.new(getClassicSphereColor())
+        trail.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.2),
+            NumberSequenceKeypoint.new(1, 1)
+        })
+        trail.Lifetime = 0.4
+        trail.Parent = clone
+
+        clone.Parent = workspace
+
+        local randomOffset = Vector3_new(math_random(-15, 15), math_random(6, 20), math_random(-15, 15))
+        local targetCFrame = clone.CFrame * CFrame_new(randomOffset)
+        
+        local baseSize = clone.Size.Magnitude > 0 and clone.Size or Vector3_new(2, 2, 2)
+        local stretchedSize = Vector3_new(baseSize.X * 0.7, baseSize.Y * 2.2, baseSize.Z * 0.7)
+
+        local tweenInfo = TweenInfo.new(1.2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(clone, tweenInfo, {
+            CFrame = targetCFrame,
+            Transparency = 1,
+            Size = stretchedSize
+        })
+        tween:Play()
+        tween.Completed:Connect(function()
+            if clone and clone.Parent then clone:Destroy() end
+        end)
+    end)
+end
+
+local function isBodyOrVisualizer(part)
+    if isSFXPart(part) then return false end
+    if limbNames[part.Name] and part.Parent == char then return true end
+    if part.Name:find("Visualizer") and part.Name ~= "F3X_VisualizerMeshGlobal" and part.Name ~= "F3X_VisualizedMeshGlobal" and part.Name ~= "CubeOutline" then return true end
+    if part:IsDescendantOf(char) and (part.Parent:IsA("Accessory") or part:FindFirstAncestorOfClass("Accessory")) then
+        return true
+    end
+    return false
+end
+
+local function isHRPChild(part)
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    return part.Parent == hrp
+end
+
+local function getWorkspaceMeshReference(partName)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Name == partName and not obj:IsDescendantOf(char) then
+            local mp = obj:IsA("MeshPart") and obj.MeshId ~= "" and obj.MeshId or nil
+            if mp then
+                return mp, obj.TextureID, obj.Size / obj.MeshSize
+            end
+            local sm = obj:FindFirstChildOfClass("SpecialMesh")
+            if sm and sm.MeshId ~= "" then
+                return sm.MeshId, sm.TextureId, sm.Scale
+            end
+        end
+    end
+    return nil, nil, nil
+end
+
+local function getMeshInfo(part)
+    local nameLower = part.Name:lower()
+
+    if part.Name == "F3X_VisualizerMeshGlobal" or part.Name == "F3X_VisualizedMeshGlobal" or part.Name == "F3X_Visualized" or part.Name == "CubeOutline" or nameLower == "idk" then
+        local scale = part.Size * CUBE_OUTLINE_SCALE_MULTIPLIER
+        return true, Enum.MeshType.FileMesh, TARGET_CUBE_MESH, "", scale
+    end
+
+    if nameLower == "hit2" or nameLower == "hit4" or nameLower == "shootsphere" or part.Name == "ClassicSphere" or part.Name == "ClassicBall" or nameLower == "idiof" then
+        return true, Enum.MeshType.Sphere, "", getActiveCustomTexture(part.Name), Vector3_new(1, 1, 1)
+    end
+    
+    local isFloorVisPart = (part:FindFirstAncestor("FloorVisualizer") ~= nil) or nameLower:find("floorvis") or (nameLower:find("visualizer") and part.Name ~= "F3X_VisualizerMeshGlobal" and part.Name ~= "F3X_VisualizedMeshGlobal" and part.Name ~= "CubeOutline")
+    if nameLower == "cyl" or nameLower == "shoot" or nameLower == "cralv3" or isFloorVisPart then
+        return true, Enum.MeshType.Cylinder, "", getActiveCustomTexture(part.Name), Vector3_new(1, 1, 1)
+    end
+
+    if nameLower == "floorcyl" then
+        return true, Enum.MeshType.Sphere, "", getActiveCustomTexture(part.Name), Vector3_new(1, 1, 1)
+    end
+
+    if ignoredMeshParts[part.Name] then
+        return false, Enum.MeshType.FileMesh, "", "", Vector3_new(1, 1, 1)
+    end
+
+    if part.Name == "HeadMeshPart" then
+        return true, Enum.MeshType.FileMesh, HEAD_MESH_ID, "", HEAD_MESH_SIZE
+    end
+
+    if part.Name == "NeckMeshPart" then
+        return true, Enum.MeshType.FileMesh, NECK_MESH_ID, "", NECK_MESH_SIZE
+    end
+
+    if part.Name:find("ArmIn") then
+        return true, Enum.MeshType.FileMesh, ARM_IN_MESH_ID, "", ARM_IN_CUSTOM_SIZE
+    elseif part.Name:find("ArmOut") then
+        return true, Enum.MeshType.FileMesh, ARM_OUT_MESH_ID, "", ARM_OUT_CUSTOM_SIZE
+    end
+
+    local acc = part:FindFirstAncestorOfClass("Accessory")
+    if acc and (acc.Name == "VigilanteScarfCrimson" or acc.Name == "Accessory (KemonoGlasses)") then
+        local mId, mScale = "", Vector3_new(1,1,1)
+        local mp = part:IsA("MeshPart") and part.MeshId ~= "" and part.MeshId or nil
+        if mp then
+            mId = mp
+            mScale = (part.MeshSize.Magnitude > 0) and (part.Size / part.MeshSize) or part.Size
+        end
+        local sm = part:FindFirstChildOfClass("SpecialMesh")
+        if sm and sm.MeshId ~= "" then
+            mId = sm.MeshId
+            mScale = sm.Scale
+        end
+        if mId ~= "" then
+            return true, Enum.MeshType.FileMesh, mId, "", mScale
+        end
+    end
+
+    if not part:FindFirstAncestor("Effects") and not isSFXPart(part) then
+        if targetModelParts[part.Name] then
+            local wsMeshId, wsTexId, wsScale = getWorkspaceMeshReference(part.Name)
+            if wsMeshId then
+                local scale = wsScale or Vector3_new(1, 1, 1)
+                if part:IsA("MeshPart") and part.MeshSize.Magnitude > 0 then
+                    scale = part.Size / part.MeshSize
+                end
+                return true, Enum.MeshType.FileMesh, wsMeshId, wsTexId or "", scale
+            end
+        end
+    end
+
+    local isMesh, mType, mId, mTex, mScale = false, Enum.MeshType.FileMesh, "", "", Vector3_new(1, 1, 1)
+
+    if part.Name == "Torso" and part.Parent == char then
+        local targetId = MALE_BLOCKY_TORSO
+        for _, v in pairs(char:GetChildren()) do
+            if v:IsA("CharacterMesh") and v.BodyPart == Enum.BodyPart.Torso then
+                if tostring(v.MeshId):find("48112070") or tostring(v.MeshId):find("482240327") then
+                    targetId = FEMALE_BLOCKY_TORSO
+                end
+            end
+        end
+        return true, Enum.MeshType.FileMesh, targetId, getActiveCustomTexture(part.Name), Vector3_new(1,1,1)
+    end
+
+    if limbMeshes[part.Name] and part.Parent == char then
+        return true, Enum.MeshType.FileMesh, limbMeshes[part.Name], getActiveCustomTexture(part.Name), Vector3_new(1,1,1)
+    end
+
+    if part:IsA("MeshPart") and part.MeshId ~= "" then
+        isMesh = true
+        mType = Enum.MeshType.FileMesh
+        mId = part.MeshId
+        mTex = part.TextureID
+        local mSize = part.MeshSize
+        mScale = (mSize and mSize.Magnitude > 0) and (part.Size / mSize) or part.Size
+    end
+
+    local sm = part:FindFirstChildOfClass("SpecialMesh")
+    if sm and sm.MeshId ~= "" then
+        isMesh = true
+        mType = (sm.MeshType == Enum.MeshType.Head and Enum.MeshType.FileMesh or sm.MeshType)
+        mId = sm.MeshId
+        mTex = sm.TextureId
+        mScale = sm.Scale
+    end
+
+    return isMesh, mType, mId, mTex, mScale
+end
+
+local function isSyncable(part)
+    if not part:IsA("BasePart") or part.Name == "HumanoidRootPart" then return false end
+    if part.Name == "Baseplate" or part.Name == "NeonParts" or part.Name == "Hole" or part.Name == "Hole2" or part.Name == "Joint" then return false end
+    
+    if isSFXPart(part) or isKillPart(part) then return true end
+    
+    if part.Transparency >= 0.99 and not limbNames[part.Name] and not part.Name:find("Visualizer") and part.Name ~= "CubeOutline" then return false end
+    if part.Parent and part.Parent:FindFirstChildOfClass("Humanoid") and part.Parent ~= char then return false end
+
+    if part:IsDescendantOf(char) then
+        if targetModelParts[part.Name] or limbNames[part.Name] then return true end
+        if part.Parent:IsA("Accessory") or part:FindFirstAncestorOfClass("Accessory") then return true end
+        if part:FindFirstAncestor("MrsStudioDummy") or part:FindFirstAncestor("Effects") or part:FindFirstAncestor("Outlines") or part:FindFirstAncestor("FloorVisualizer") or part:FindFirstAncestor("SFXFolder") or part.Name:find("Visualizer") or part.Name == "CubeOutline" then
+            return true
+        end
+        if isHRPChild(part) then return true end
+    elseif targetModelParts[part.Name] or part.Name == "ClassicSphere" or part.Name == "ClassicBall" or part.Name == "idk" or part.Name == "cralv3" or part.Name == "idiof" or part.Name == "CubeOutline" or part.Name == "F3X_VisualizerMeshGlobal" or part.Name == "F3X_VisualizedMeshGlobal" or part.Name == "HeadMeshPart" or part.Name == "NeckMeshPart" then
+        return true
+    end
+
+    return false
+end
+
+local function destroyServerPart(localPart)
+    local data = trackedParts[localPart]
+    if data then
+        trackedParts[localPart] = nil
+        pendingMirror[localPart] = nil
+        if data.sPart and Remote then
+            task.spawn(function()
+                pcall(function()
+                    Remote:InvokeServer("Remove", {data.sPart})
+                end)
+            end)
+        end
+    end
+end
+
+local function mirrorPart(localPart)
+    if not scriptActive then return end
+    if trackedParts[localPart] or pendingMirror[localPart] then return end
+    if not isSyncable(localPart) then return end
+    pendingMirror[localPart] = true
+
+    local destroyConn, parentConn
+    destroyConn = localPart.Destroying:Connect(function()
+        if destroyConn then destroyConn:Disconnect() end
+        if parentConn then parentConn:Disconnect() end
+        destroyServerPart(localPart)
+    end)
+    parentConn = localPart:GetPropertyChangedSignal("Parent"):Connect(function()
+        if not localPart.Parent or not localPart:IsDescendantOf(game) then
+            if destroyConn then destroyConn:Disconnect() end
+            if parentConn then parentConn:Disconnect() end
+            destroyServerPart(localPart)
+        end
+    end)
+
+    local shape = "Normal"
+    local isInstant = isSFXPart(localPart) or priorityParts[localPart.Name] or localPart:FindFirstAncestor("Effects") or localPart:FindFirstAncestor("SFXFolder")
+    
+    local function doMirror()
+        if not Remote or not scriptActive then
+            pendingMirror[localPart] = nil
+            return
+        end
+        local success, sPart = pcall(function()
+            return Remote:InvokeServer("CreatePart", shape, localPart.CFrame, workspace)
+        end)
+        pendingMirror[localPart] = nil
+        if not localPart.Parent or not localPart:IsDescendantOf(game) then
+            if success and sPart then
+                pcall(function() Remote:InvokeServer("Remove", {sPart}) end)
+            end
+            return
+        end
+
+        if success and sPart then
+            local hasMesh, mType, mId, mTex, mScale = getMeshInfo(localPart)
+            pcall(function()
+                sPart.CanQuery = false
+                sPart.CanCollide = false
+                sPart.Massless = true
+            end)
+
+            local initialColor = localPart.Color
+            if localPart.Name:find("ArmOut") then
+                initialColor = Color3.new(0, 0, 0)
+            end
+
+            local initialMaterial = localPart.Material
+            if shouldBeNeon(localPart) then
+                initialMaterial = Enum.Material.Neon
+            end
+
+            trackedParts[localPart] = {
+                sPart = sPart,
+                CFrame = localPart.CFrame,
+                Mesh = hasMesh,
+                MeshType = mType,
+                MeshId = mId,
+                TextureId = mTex,
+                Scale = mScale,
+                LastSize = localPart.Size,
+                LastColor = initialColor,
+                LastTrans = localPart.Transparency,
+                LastMaterial = initialMaterial
+            }
+
+            pcall(function()
+                local randomName = generateRandomString()
+                Remote:InvokeServer("SyncName", {{Part = sPart, Name = randomName}})
+                Remote:InvokeServer("SyncResize", {{Part = sPart, CFrame = sPart.CFrame, Size = localPart.Size}})
+                Remote:InvokeServer("SyncColor", {{Part = sPart, Color = initialColor}})
+                local targetTrans = isBodyOrVisualizer(localPart) and 0 or localPart.Transparency
+                Remote:InvokeServer("SyncMaterial", {{Part = sPart, Material = initialMaterial, Transparency = targetTrans}})
+                Remote:InvokeServer("SyncAnchor", {{Part = sPart, Anchored = true}})
+                Remote:InvokeServer("SyncCollision", {{Part = sPart, CanCollide = false}})
+                Remote:InvokeServer("SetLocked", {sPart}, true)
+            end)
+
+            if hasMesh then
+                pcall(function()
+                    Remote:InvokeServer("CreateMeshes", {{Part = sPart}})
+                    Remote:InvokeServer("SyncMesh", {{
+                        Part = sPart,
+                        MeshType = mType,
+                        MeshId = mId,
+                        TextureId = mTex,
+                        Scale = mScale
+                    }})
+                end)
+            end
+        end
+    end
+
+    if isInstant then
+        doMirror()
+    else
+        task.spawn(doMirror)
+    end
+end
+
+local function registerContainerFast(container)
+    if not container then return end
+    
+    local function processObj(obj)
+        if obj:IsA("BasePart") then
+            if isKillPart(obj) then
+                sfxKillingParts[obj] = true
+                if not obj:GetAttribute("TouchBound") then
+                    obj:SetAttribute("TouchBound", true)
+                    obj.Touched:Connect(function(hit) processHit(hit, obj) end)
+                end
+            end
+            mirrorPart(obj)
+        end
+    end
+
+    for _, obj in ipairs(container:GetDescendants()) do
+        processObj(obj)
+    end
+    
+    container.DescendantAdded:Connect(function(des)
+        processObj(des)
+    end)
+end
+
+local function registerWorkspaceDirectly()
+    registerContainerFast(workspace)
+    workspace.ChildAdded:Connect(function(child)
+        if child:IsA("BasePart") and (targetModelParts[child.Name] or isSFXPart(child) or priorityParts[child.Name]) then
+            mirrorPart(child)
+        end
+    end)
+end
+
+local function findLimb(names)
+    for _, name in ipairs(names) do
+        local found = char:FindFirstChild(name, true)
+        if found and found:IsA("BasePart") then return found end
+    end
+    return nil
+end
+
+local function initCharacterAttachments()
+    task.spawn(function()
+        local leftArm = findLimb({"Left Arm", "LeftHand", "LeftLowerArm", "LeftUpperArm"})
+        local leftLeg = findLimb({"Left Leg", "LeftLowerLeg", "LeftUpperLeg", "LeftFoot"})
+        local rightLeg = findLimb({"Right Leg", "RightLowerLeg", "RightUpperLeg", "RightFoot"})
+
+        local targetLimbs = {
+            {limb = leftArm, inName = "LeftArmArmIn", outName = "LeftArmArmOut"},
+            {limb = leftLeg, inName = "LeftLegArmIn", outName = "LeftLegArmOut"},
+            {limb = rightLeg, inName = "RightLegArmIn", outName = "RightLegArmOut"}
+        }
+
+        for _, data in ipairs(targetLimbs) do
+            local limb = data.limb
+            if limb then
+                local pIn = Instance.new("Part")
+                pIn.Name = data.inName
+                pIn.Size = Vector3_new(1, 1, 1)
+                pIn.Transparency = 1
+                pIn.CanCollide = false
+                pIn.CanQuery = false
+                pIn.Massless = true
+                pIn.Parent = char
+                local wIn = Instance.new("Weld")
+                wIn.Part0 = limb
+                wIn.Part1 = pIn
+                wIn.C0 = CFrame_new(ARM_IN_VERTICAL_OFFSET)
+                wIn.Parent = pIn
+                mirrorPart(pIn)
+
+                local pOut = Instance.new("Part")
+                pOut.Name = data.outName
+                pOut.Size = Vector3_new(1, 1, 1)
+                pOut.Transparency = 1
+                pOut.CanCollide = false
+                pOut.CanQuery = false
+                pOut.Massless = true
+                pOut.Parent = char
+                local wOut = Instance.new("Weld")
+                wOut.Part0 = limb
+                wOut.Part1 = pOut
+                wOut.C0 = CFrame_new(ARM_OUT_VERTICAL_OFFSET)
+                wOut.Parent = pOut
+                mirrorPart(pOut)
+            end
+        end
+    end)
+
+    -- Head Mesh Part
+    task.spawn(function()
+        local head = char:WaitForChild("Head", 5)
+        if head then
+            local headMeshPart = Instance.new("Part")
+            headMeshPart.Name = "HeadMeshPart"
+            headMeshPart.Size = HEAD_MESH_SIZE
+            headMeshPart.Transparency = 0
+            headMeshPart.CanCollide = false
+            headMeshPart.CanQuery = false
+            headMeshPart.Massless = true
+            headMeshPart.Parent = char
+
+            local weld = Instance.new("Weld")
+            weld.Part0 = head
+            weld.Part1 = headMeshPart
+            weld.C0 = CFrame_new(HEAD_MESH_POS) * CFrame_Angles(math_rad(HEAD_MESH_ROT.X), math_rad(HEAD_MESH_ROT.Y), math_rad(HEAD_MESH_ROT.Z))
+            weld.Parent = headMeshPart
+
+            mirrorPart(headMeshPart)
+        end
+    end)
+
+    -- Neck Mesh Part
+    task.spawn(function()
+        local torso = char:WaitForChild("UpperTorso", 5) or char:WaitForChild("Torso", 5) or char:WaitForChild("Head", 5)
+        if torso then
+            local neckMeshPart = Instance.new("Part")
+            neckMeshPart.Name = "NeckMeshPart"
+            neckMeshPart.Size = NECK_MESH_SIZE
+            neckMeshPart.Transparency = 0
+            neckMeshPart.CanCollide = false
+            neckMeshPart.CanQuery = false
+            neckMeshPart.Massless = true
+            neckMeshPart.Parent = char
+
+            local weld = Instance.new("Weld")
+            weld.Part0 = torso
+            weld.Part1 = neckMeshPart
+            weld.C0 = CFrame_new(NECK_MESH_POS) * CFrame_Angles(math_rad(NECK_MESH_ROT.X), math_rad(NECK_MESH_ROT.Y), math_rad(NECK_MESH_ROT.Z))
+            weld.Parent = neckMeshPart
+
+            mirrorPart(neckMeshPart)
+        end
+    end)
+
+    -- CubeOutline / Visualizer Weld
+    task.spawn(function()
+        local function setupVisualizerWeld()
+            local invCube = char:WaitForChild("InvCube", 3) or workspace:WaitForChild("InvCube", 3) or char:WaitForChild("CubeOutline", 3) or workspace:WaitForChild("CubeOutline", 3)
+            if invCube then
+                local visCube = char:FindFirstChild("CubeOutline") or char:FindFirstChild("F3X_VisualizerMeshGlobal") or char:FindFirstChild("F3X_VisualizedMeshGlobal") or workspace:FindFirstChild("CubeOutline")
+                if not visCube then
+                    visCube = Instance.new("Part")
+                    visCube.Name = "CubeOutline"
+                    visCube.Size = invCube.Size * CUBE_OUTLINE_SCALE_MULTIPLIER
+                    visCube.Transparency = 0
+                    visCube.CanCollide = false
+                    visCube.CanQuery = false
+                    visCube.Massless = true
+                    visCube.Parent = char
+                end
+                
+                local existingWeld = visCube:FindFirstChildOfClass("Weld")
+                if not existingWeld or existingWeld.Part0 ~= invCube then
+                    if existingWeld then existingWeld:Destroy() end
+                    local newWeld = Instance.new("Weld")
+                    newWeld.Part0 = invCube
+                    newWeld.Part1 = visCube
+                    newWeld.C0 = CFrame.new(0, 0, 0)
+                    newWeld.Parent = visCube
+                end
+                mirrorPart(visCube)
+            end
+        end
+        
+        setupVisualizerWeld()
+        char.ChildAdded:Connect(function(child)
+            if child.Name == "InvCube" or child.Name == "CubeOutline" or child.Name:find("Visualizer") then
+                task.defer(setupVisualizerWeld)
+            end
+        end)
+    end)
+end
+
+initCharacterAttachments()
+
+local function isStandingOnBaseplate(hrp)
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {char}
+    local raycastResult = workspace:Raycast(hrp.Position, Vector3_new(0, -6, 0), raycastParams)
+    if raycastResult and raycastResult.Instance then
+        if raycastResult.Instance.Name:lower():find("baseplate") then
+            return true
+        end
+    end
+    return false
+end
+
+function processHit(hit, sourcePart)
+    if damageState == "Disabled" or not hit or not hit:IsA("BasePart") then return end
+    if not sourcePart or not isKillPart(sourcePart) then return end
+    if hit:IsDescendantOf(char) or isProjectileEffect(hit) then return end
+
+    local sourceName = sourcePart.Name:lower()
+    if (sourceName:find("sword") or sourceName:find("espada")) and not swordLethal then return end
+
+    local victimModel = hit:FindFirstAncestorOfClass("Model")
+    local victimHumanoid = victimModel and victimModel:FindFirstChildOfClass("Humanoid")
+
+    if sourceName:find("cyl") and not victimHumanoid then return end
+
+    if damageState == "PlayerDamage" then
+        if not victimHumanoid then return end
+    elseif damageState == "AOEParts" then
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp and isStandingOnBaseplate(hrp) then
+            if hit.Name:lower():find("baseplate") then return end
+        end
+        if hit.Locked then return end
+    end
+
+    if hit.Name == "Terrain" or hit:GetAttribute("F3X_Destroying") then return end
+
+    for _, data in pairs(trackedParts) do
+        if data.sPart == hit then return end
+    end
+
+    if victimHumanoid and victimModel ~= char then
+        if victimModel:GetAttribute("F3X_Damaging") then return end
+        victimModel:SetAttribute("F3X_Damaging", true)
+
+        task.spawn(function()
+            pcall(function()
+                local newHealth = math.max(0, victimHumanoid.Health - CUSTOM_DAMAGE)
+                if newHealth <= 0 then
+                    local allParts = {}
+                    for _, p in ipairs(victimModel:GetDescendants()) do
+                        if p:IsA("BasePart") and not isProjectileEffect(p) then
+                            table.insert(allParts, p)
+                        end
+                    end
+                    
+                    local partsToDelete = {}
+                    local selectedParts = {}
+                    for i = 1, math.min(3, #allParts) do
+                        local randIdx = math_random(1, #allParts)
+                        local chosenPart = table.remove(allParts, randIdx)
+                        table.insert(selectedParts, chosenPart)
+                        table.insert(partsToDelete, chosenPart)
+                    end
+
+                    for _, p in ipairs(selectedParts) do
+                        playDestructionEffect(p)
+                    end
+
+                    for _, p in ipairs(allParts) do
+                        table.insert(partsToDelete, p)
+                    end
+
+                    pcall(function()
+                        if Remote then Remote:InvokeServer("Remove", partsToDelete) end
+                    end)
+                else
+                    victimHumanoid.Health = newHealth
+                end
+            end)
+            task.wait(HIT_COOLDOWN)
+            if victimModel then
+                victimModel:SetAttribute("F3X_Damaging", nil)
+            end
+        end)
+    else
+        if damageState == "PlayerDamage" then return end
+        hit:SetAttribute("F3X_Destroying", true)
+        
+        playDestructionEffect(hit)
+
+        local meshInfo = hit:FindFirstChildOfClass("SpecialMesh")
+        table.insert(destroyedHistory, {
+            Name = hit.Name,
+            Parent = hit.Parent,
+            Shape = (hit:IsA("WedgePart") and "Wedge") or (hit:IsA("Part") and hit.Shape == Enum.PartType.Ball and "Ball") or (hit:IsA("Part") and hit.Shape == Enum.PartType.Cylinder and "Cylinder") or "Normal",
+            CFrame = hit.CFrame,
+            Size = hit.Size,
+            Color = hit.Color,
+            Material = hit.Material,
+            Transparency = hit.Transparency,
+            Reflectance = hit.Reflectance,
+            Anchored = hit.Anchored,
+            TopSurface = hit.TopSurface,
+            BottomSurface = hit.BottomSurface,
+            LeftSurface = hit.LeftSurface,
+            RightSurface = hit.RightSurface,
+            FrontSurface = hit.FrontSurface,
+            BackSurface = hit.BackSurface,
+            MeshType = meshInfo and meshInfo.MeshType or Enum.MeshType.FileMesh,
+            MeshId = (hit:IsA("MeshPart") and hit.MeshId) or (meshInfo and meshInfo.MeshId) or "",
+            TextureId = (hit:IsA("MeshPart") and hit.TextureID) or (meshInfo and meshInfo.TextureId) or "",
+            Scale = meshInfo and meshInfo.Scale or Vector3_new(1, 1, 1)
+        })
+
+        task.spawn(function()
+            pcall(function()
+                if Remote then Remote:InvokeServer("Remove", {hit}) end
+            end)
+        end)
+    end
+end
+
+local overlapParams = OverlapParams.new()
+overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+overlapParams.RespectCanCollide = false
+
+RS.Heartbeat:Connect(function()
+    if not scriptActive or damageState == "Disabled" then return end
+    local filterList = {char}
+    for _, data in pairs(trackedParts) do
+        if data.sPart then table.insert(filterList, data.sPart) end
+    end
+    overlapParams.FilterDescendantsInstances = filterList
+
+    for sourcePart, _ in pairs(sfxKillingParts) do
+        if sourcePart and sourcePart.Parent and isKillPart(sourcePart) then
+            local touching = workspace:GetPartsInPart(sourcePart, overlapParams)
+            for _, hit in ipairs(touching) do
+                processHit(hit, sourcePart)
+            end
+        else
+            sfxKillingParts[sourcePart] = nil
+        end
+    end
+end)
+
+registerContainerFast(char)
+registerWorkspaceDirectly()
+registerContainerFast(workspace:FindFirstChild("Effects"))
+registerContainerFast(workspace:FindFirstChild("FloorVisualizer"))
+registerContainerFast(workspace:FindFirstChild("SFXFolder"))
+registerContainerFast(workspace:FindFirstChild("FXFolder"))
+registerContainerFast(workspace:FindFirstChild("DFXFolder"))
+registerContainerFast(LP:WaitForChild("Backpack"))
+
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "FloorVisualizer" or child.Name == "Effects" or child.Name == "Debris" or child.Name == "SFXFolder" or child.Name == "FXFolder" or child.Name == "DFXFolder" then
+        registerContainerFast(child)
+    end
+end)
+
+-- 💬 CHAT COMMANDS: setting/end & purge/"targetname"
+LP.Chatted:Connect(function(msg)
+    local msgLower = msg:lower()
+
+    if msgLower == "setting/end" then
+        scriptActive = false
+        local removes = {}
+        for _, data in pairs(trackedParts) do
+            if data.sPart then
+                table.insert(removes, data.sPart)
+            end
+        end
+        pcall(function()
+            if Remote and #removes > 0 then
+                Remote:InvokeServer("Remove", removes)
+            end
+        end)
+        trackedParts = {}
+        pendingMirror = {}
+        sendNotification("F3X System", "Todas as meshes e partes foram deletadas (setting/end).")
+        return
+    end
+
+    if msgLower:sub(1, 6) == "purge/" then
+        local targetName = msg:sub(7):gsub('"', ''):gsub("'", ""):lower()
+        local countDeleted = 0
+
+        local function checkAndDelete(container)
+            if not container then return end
+            for _, item in ipairs(container:GetChildren()) do
+                if item.Name:lower():find(targetName) then
+                    item:Destroy()
+                    countDeleted = countDeleted + 1
+                end
+            end
+        end
+
+        checkAndDelete(LP.Backpack)
+        checkAndDelete(LP.Character)
+        checkAndDelete(LP.PlayerGui)
+
+        sendNotification("Purge System", countDeleted .. " item(ns) correspondentes a '" .. targetName .. "' foram deletados.")
+        return
+    end
+end)
+
+UIS.InputBegan:Connect(function(input, gpe)
+    -- 🌟 BLOQUEIO DE EQUIPAR ITENS PELAS TECLAS 2, 4, 5, 6 E 7
+    local noEquipKeys = {
+        [Enum.KeyCode.Two] = true, [Enum.KeyCode.KeypadTwo] = true,
+        [Enum.KeyCode.Four] = true, [Enum.KeyCode.KeypadFour] = true,
+        [Enum.KeyCode.Five] = true, [Enum.KeyCode.KeypadFive] = true,
+        [Enum.KeyCode.Six] = true, [Enum.KeyCode.KeypadSix] = true,
+        [Enum.KeyCode.Seven] = true, [Enum.KeyCode.KeypadSeven] = true,
+    }
+
+    if noEquipKeys[input.KeyCode] then
+        local tool = char:FindFirstChildOfClass("Tool")
+        if tool then
+            tool.Parent = LP.Backpack
+        end
+    end
+
+    local blockedKeys = {
+        Enum.KeyCode.Two, Enum.KeyCode.Four, Enum.KeyCode.Five, Enum.KeyCode.Six, Enum.KeyCode.Seven,
+        Enum.KeyCode.KeypadTwo, Enum.KeyCode.KeypadFour, Enum.KeyCode.KeypadFive, Enum.KeyCode.KeypadSix, Enum.KeyCode.KeypadSeven
+    }
+    for _, v in ipairs(blockedKeys) do
+        if input.KeyCode == v then
+            if input.KeyCode ~= Enum.KeyCode.Six and input.KeyCode ~= Enum.KeyCode.Seven then 
+                return 
+            end
+        end
+    end
+
+    if gpe then return end
+
+    if input.KeyCode == Enum.KeyCode.N then
+        sendNotification("Tecla N", "Ativada!")
+        return
+    end
+
+    if input.KeyCode == Enum.KeyCode.Six then
+        if damageState == "Disabled" then
+            damageState = "AOEParts"
+            sendNotification("Tsuyiko's Traveller", "Setting = Enum.KillType.AOEPartsBanish")
+        elseif damageState == "AOEParts" then
+            damageState = "PlayerDamage"
+            sendNotification("Tsuyiko's Traveller", "Setting ,= Enum.KillType.HumanoidDamage")
+        else
+            damageState = "Disabled"
+            sendNotification("Tsuyiko's Traveller", "Setting = Enum.KillType.Disabled")
+        end
+    elseif input.KeyCode == Enum.KeyCode.X then
+        if not swordLethal then
+            swordLethal = true
+            task.delay(0.5, function()
+                swordLethal = false
+            end)
+        end
+    elseif input.KeyCode == Enum.KeyCode.Seven or input.KeyCode == Enum.KeyCode.KeypadSeven then
+        -- 🌟 TECLA 7: Recriação de partes exatamente como eram (com textura/mesh/cor/material) sem efeitos + Clear Table
+        if #destroyedHistory > 0 then
+            local restoredCount = #destroyedHistory
+            for _, lastData in ipairs(destroyedHistory) do
+                task.spawn(function()
+                    local targetParent = (lastData.Parent and lastData.Parent:IsDescendantOf(game)) and lastData.Parent or workspace
+                    local success, newPart = pcall(function()
+                        if Remote then return Remote:InvokeServer("CreatePart", lastData.Shape, lastData.CFrame, targetParent) end
+                    end)
+                    if success and newPart then
+                        pcall(function()
+                            Remote:InvokeServer("SyncName", {{Part = newPart, Name = generateRandomString()}})
+                            Remote:InvokeServer("SyncResize", {{Part = newPart, CFrame = lastData.CFrame, Size = lastData.Size}})
+                            Remote:InvokeServer("SyncColor", {{Part = newPart, Color = lastData.Color}})
+                            Remote:InvokeServer("SyncMaterial", {{Part = newPart, Material = lastData.Material, Transparency = lastData.Transparency}})
+                            Remote:InvokeServer("SyncProperty", {{Part = newPart, Property = "Reflectance", Value = lastData.Reflectance}})
+                            Remote:InvokeServer("SyncSurface", {{
+                                Part = newPart, Top = lastData.TopSurface, Bottom = lastData.BottomSurface,
+                                Left = lastData.LeftSurface, Right = lastData.RightSurface,
+                                Front = lastData.FrontSurface, Back = lastData.BackSurface
+                            }})
+                            Remote:InvokeServer("SyncAnchor", {{Part = newPart, Anchored = lastData.Anchored}})
+                            if lastData.MeshId and lastData.MeshId ~= "" then
+                                Remote:InvokeServer("CreateMeshes", {{Part = newPart}})
+                                Remote:InvokeServer("SyncMesh", {{Part = newPart, MeshType = lastData.MeshType, MeshId = lastData.MeshId, TextureId = lastData.TextureId or "", Scale = lastData.Scale}})
+                            end
+                        end)
+                    end
+                end)
+            end
+            destroyedHistory = {}
+            sendNotification("F3X System", restoredCount .. " partes recriadas perfeitamente! Histórico limpo.")
+        end
+    end
+end)
+
+local lastSync = 0
+local SYNC_INTERVAL = 0.033
+local rotationAngle = 0
+
+RS.Heartbeat:Connect(function(dt)
+    if not scriptActive then return end
+    rotationAngle = rotationAngle + (dt * 15)
+
+    lastSync = lastSync + dt
+    if lastSync < SYNC_INTERVAL then return end
+    lastSync = 0
+
+    local moves, removes, colors, materials, resizes, locks, meshUpdates = {}, {}, {}, {}, {}, {}, {}
+
+    for _, v in pairs(char:GetDescendants()) do
+        if v:IsA("BasePart") and v.Locked == true then
+            v.Locked = false
+        end
+    end
+
+    local classicSphere = char:FindFirstChild("ClassicSphere") or workspace:FindFirstChild("ClassicSphere")
+    local headMeshPart = char:FindFirstChild("HeadMeshPart")
+    local neckMeshPart = char:FindFirstChild("NeckMeshPart")
+
+    if classicSphere then
+        if headMeshPart and headMeshPart.Color ~= classicSphere.Color then
+            headMeshPart.Color = classicSphere.Color
+        end
+        if neckMeshPart and neckMeshPart.Color ~= classicSphere.Color then
+            neckMeshPart.Color = classicSphere.Color
+        end
+
+        for localPart, data in pairs(trackedParts) do
+            local acc = localPart:FindFirstAncestorOfClass("Accessory")
+            local isScarfOrGlasses = acc and (acc.Name == "VigilanteScarfCrimson" or acc.Name == "Accessory (KemonoGlasses)") or (acc and acc.Name:lower():find("kitsune"))
+            local isArmInPart = localPart.Name:find("ArmIn") ~= nil or localPart.Name == "ArmIn"
+            local isHeadMesh = localPart.Name == "HeadMeshPart"
+            local isNeckMesh = localPart.Name == "NeckMeshPart"
+            local isVisualizedMesh = localPart.Name == "CubeOutline" or localPart.Name == "F3X_VisualizerMeshGlobal" or localPart.Name == "F3X_VisualizedMeshGlobal" or localPart.Name == "F3X_Visualized"
+
+            if isScarfOrGlasses or isArmInPart or isHeadMesh or isNeckMesh or isVisualizedMesh then
+                local targetColor = classicSphere.Color
+                if localPart.Color ~= targetColor then
+                    localPart.Color = targetColor
+                    table.insert(colors, {Part = data.sPart, Color = targetColor})
+                end
+            end
+
+            local isArmOutPart = localPart.Name:find("ArmOut") ~= nil
+            if isArmOutPart then
+                local blackColor = Color3.new(0, 0, 0)
+                if localPart.Color ~= blackColor then
+                    localPart.Color = blackColor
+                    table.insert(colors, {Part = data.sPart, Color = blackColor})
+                end
+            end
+        end
+    end
+
+    for localPart, data in pairs(trackedParts) do
+        if not localPart.Parent or not localPart:IsDescendantOf(game) then
+            if data.sPart then table.insert(removes, data.sPart) end
+            trackedParts[localPart] = nil
+            continue
+        end
+
+        local currentCFrame = localPart.CFrame
+        if localPart.Name:find("RotBullets") then
+            currentCFrame = localPart.CFrame * CFrame_Angles(0, 0, rotationAngle)
+        end
+
+        if currentCFrame ~= data.CFrame then
+            data.CFrame = currentCFrame
+            table.insert(moves, {Part = data.sPart, CFrame = currentCFrame})
+        end
+
+        if localPart.Size ~= data.LastSize then
+            data.LastSize = localPart.Size
+            table.insert(resizes, {Part = data.sPart, CFrame = currentCFrame, Size = localPart.Size})
+            if data.Mesh and data.MeshId and data.MeshId ~= "" then
+                local _, _, _, _, newScale = getMeshInfo(localPart)
+                if (newScale - data.Scale).Magnitude > 0.001 then
+                    data.Scale = newScale
+                    table.insert(meshUpdates, {Part = data.sPart, MeshType = data.MeshType, MeshId = data.MeshId, TextureId = "", Scale = newScale})
+                end
+            end
+        end
+
+        if localPart.Color ~= data.LastColor then
+            data.LastColor = localPart.Color
+            table.insert(colors, {Part = data.sPart, Color = localPart.Color})
+        end
+
+        local desiredMaterial = localPart.Material
+        if shouldBeNeon(localPart) then
+            desiredMaterial = Enum.Material.Neon
+        end
+
+        if desiredMaterial ~= data.LastMaterial or localPart.Transparency ~= data.LastTrans then
+            data.LastMaterial = desiredMaterial
+            data.LastTrans = localPart.Transparency
+            local sTrans = isBodyOrVisualizer(localPart) and 0 or localPart.Transparency
+            table.insert(materials, {Part = data.sPart, Material = desiredMaterial, Transparency = sTrans})
+        end
+
+        if data.sPart and data.sPart.Locked == false then
+            table.insert(locks, data.sPart)
+        end
+
+        localPart.LocalTransparencyModifier = 1
+    end
+
+    pcall(function()
+        if Remote then
+            if #moves > 0 then Remote:InvokeServer("SyncMove", moves) end
+            if #resizes > 0 then Remote:InvokeServer("SyncResize", resizes) end
+            if #meshUpdates > 0 then Remote:InvokeServer("SyncMesh", meshUpdates) end
+            if #removes > 0 then Remote:InvokeServer("Remove", removes) end
+            if #colors > 0 then Remote:InvokeServer("SyncColor", colors) end
+            if #materials > 0 then Remote:InvokeServer("SyncMaterial", materials) end
+            if #locks > 0 then Remote:InvokeServer("SetLocked", locks, true) end
+        end
+    end)
+end)
+
+LP.CharacterAdded:Connect(function(newChar)
+    char = newChar
+    New = newChar
+    scriptActive = true
+    trackedParts = {}
+    pendingMirror = {}
+    sfxKillingParts = {}
+
+    getRemote()
+
+    local function setupToolListener(container)
+        if not container then return end
+        container.ChildAdded:Connect(function(child)
+            if child:IsA("Tool") then
+                local nameLower = child.Name:lower()
+                if nameLower:find("building") or nameLower:find("f3x") or nameLower:find("tool") then
+                    task.wait(0.5)
+                    scriptActive = true
+                    initCharacterAttachments()
+                    registerContainerFast(char)
+                    sendNotification("F3X System", "Building Tools detectados! Meshes reconstruídas e corpo realinhado (Refit).")
+                end
+            end
+        end)
+    end
+
+    setupToolListener(LP.Backpack)
+    setupToolListener(char)
+
+    task.spawn(function()
+        task.wait(1)
+        registerContainerFast(char)
+    end)
+end)
