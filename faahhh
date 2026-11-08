@@ -5,7 +5,7 @@ local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 local math_random = math.random
 local math_rad = math.rad
-local Vector3_new = Vector3_new
+local Vector3_new = Vector3.new
 local CFrame_new = CFrame.new
 local CFrame_Angles = CFrame.Angles
 local LP = Players.LocalPlayer
@@ -262,7 +262,6 @@ local function isKillPart(part)
     return false
 end
 
--- 🌟 NOVA ANIMAÇÃO DA SOUL: Flutua por 1s, vai suavemente até o InvCube, transparência 0.5, mesh esticada (oval) + Trail de Partes
 local function playDestructionEffect(originalPart)
     if not originalPart or not originalPart:IsA("BasePart") then return end
     task.spawn(function()
@@ -279,7 +278,7 @@ local function playDestructionEffect(originalPart)
         clone.Massless = true
         clone.Material = Enum.Material.Neon
         clone.Color = getClassicSphereColor()
-        clone.Transparency = 0.5 -- Transparência fixa em 0.5
+        clone.Transparency = 0.5
 
         for _, child in ipairs(clone:GetChildren()) do
             if child:IsA("Texture") or child:IsA("Decal") or child:IsA("Trail") then
@@ -297,7 +296,6 @@ local function playDestructionEffect(originalPart)
         local startCFrame = originalPart.CFrame
         clone.CFrame = startCFrame
 
-        -- 1. FASE DE FLUTUAÇÃO NO LOCAL (1 SEGUNDO)
         local hoverStart = tick()
         while tick() - hoverStart < 1.0 do
             if not clone or not clone.Parent then return end
@@ -306,11 +304,10 @@ local function playDestructionEffect(originalPart)
             task.wait()
         end
 
-        -- 2. FASE DE VIAGEM SUAVE ATÉ O InvCube
         local invCube = workspace:FindFirstChild("InvCube", true) or char:FindFirstChild("InvCube", true)
         local targetPos = invCube and invCube.Position or (startCFrame.Position + Vector3_new(0, 15, 0))
 
-        local travelTime = 1.8 -- Viagem suave e lenta
+        local travelTime = 1.8
         local travelStart = tick()
         local baseSize = clone.Size.Magnitude > 0 and clone.Size or Vector3_new(2, 2, 2)
 
@@ -321,18 +318,15 @@ local function playDestructionEffect(originalPart)
 
             local currentPos = startCFrame.Position:Lerp(targetPos, alpha)
             
-            -- Orientar o CFrame para onde ela está indo
             if (targetPos - currentPos).Magnitude > 0.1 then
                 clone.CFrame = CFrame.new(currentPos, targetPos) * CFrame_Angles(math.pi/2, 0, 0)
             else
                 clone.CFrame = CFrame.new(currentPos)
             end
 
-            -- Esticar a mesh em forma de oval para a direção do movimento
             local stretch = 1 + (math.sin(alpha * math.pi) * 1.8)
             clone.Size = Vector3_new(baseSize.X * 0.7, baseSize.Y * (2.0 * stretch), baseSize.Z * 0.7)
 
-            -- Trail feita com Part meshes (pequenas esferas brilhantes deixadas para trás)
             if math_random(1, 2) == 1 then
                 task.spawn(function()
                     local trailPart = Instance.new("Part")
