@@ -5,7 +5,7 @@ local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 local math_random = math.random
 local math_rad = math.rad
-local Vector3_new = Vector3.new
+local Vector3_new = Vector3_new
 local CFrame_new = CFrame.new
 local CFrame_Angles = CFrame.Angles
 local LP = Players.LocalPlayer
@@ -262,6 +262,7 @@ local function isKillPart(part)
     return false
 end
 
+-- 🌟 NOVA ANIMAÇÃO DA SOUL: Flutua por 1s, vai suavemente até o InvCube, transparência 0.5, mesh esticada (oval) + Trail de Partes
 local function playDestructionEffect(originalPart)
     if not originalPart or not originalPart:IsA("BasePart") then return end
     task.spawn(function()
@@ -272,18 +273,16 @@ local function playDestructionEffect(originalPart)
             clone.Shape = Enum.PartType.Ball
         end
         
-        clone.Anchored = false
+        clone.Anchored = true
         clone.CanCollide = false
         clone.CanQuery = false
         clone.Massless = true
         clone.Material = Enum.Material.Neon
         clone.Color = getClassicSphereColor()
-        
-        local startTrans = math.clamp(originalPart.Transparency, 0, 0.5)
-        clone.Transparency = startTrans
+        clone.Transparency = 0.5 -- Transparência fixa em 0.5
 
         for _, child in ipairs(clone:GetChildren()) do
-            if child:IsA("Texture") or child:IsA("Decal") then
+            if child:IsA("Texture") or child:IsA("Decal") or child:IsA("Trail") then
                 child:Destroy()
             elseif child:IsA("SpecialMesh") then
                 child.TextureId = ""
@@ -294,40 +293,77 @@ local function playDestructionEffect(originalPart)
         end
         if clone:IsA("MeshPart") then clone.TextureID = "" end
 
-        local att0 = Instance.new("Attachment", clone)
-        att0.Position = Vector3_new(0, 0, 0)
-        local att1 = Instance.new("Attachment", clone)
-        att1.Position = Vector3_new(0, -1.5, 0)
-
-        local trail = Instance.new("Trail")
-        trail.Attachment0 = att0
-        trail.Attachment1 = att1
-        trail.Color = ColorSequence.new(getClassicSphereColor())
-        trail.Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.2),
-            NumberSequenceKeypoint.new(1, 1)
-        })
-        trail.Lifetime = 0.4
-        trail.Parent = clone
-
         clone.Parent = workspace
+        local startCFrame = originalPart.CFrame
+        clone.CFrame = startCFrame
 
-        local randomOffset = Vector3_new(math_random(-15, 15), math_random(6, 20), math_random(-15, 15))
-        local targetCFrame = clone.CFrame * CFrame_new(randomOffset)
-        
+        -- 1. FASE DE FLUTUAÇÃO NO LOCAL (1 SEGUNDO)
+        local hoverStart = tick()
+        while tick() - hoverStart < 1.0 do
+            if not clone or not clone.Parent then return end
+            local elapsed = tick() - hoverStart
+            clone.CFrame = startCFrame + Vector3_new(0, math.sin(elapsed * 6) * 0.3, 0)
+            task.wait()
+        end
+
+        -- 2. FASE DE VIAGEM SUAVE ATÉ O InvCube
+        local invCube = workspace:FindFirstChild("InvCube", true) or char:FindFirstChild("InvCube", true)
+        local targetPos = invCube and invCube.Position or (startCFrame.Position + Vector3_new(0, 15, 0))
+
+        local travelTime = 1.8 -- Viagem suave e lenta
+        local travelStart = tick()
         local baseSize = clone.Size.Magnitude > 0 and clone.Size or Vector3_new(2, 2, 2)
-        local stretchedSize = Vector3_new(baseSize.X * 0.7, baseSize.Y * 2.2, baseSize.Z * 0.7)
 
-        local tweenInfo = TweenInfo.new(1.2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
-        local tween = TweenService:Create(clone, tweenInfo, {
-            CFrame = targetCFrame,
-            Transparency = 1,
-            Size = stretchedSize
-        })
-        tween:Play()
-        tween.Completed:Connect(function()
-            if clone and clone.Parent then clone:Destroy() end
-        end)
+        while tick() - travelStart < travelTime do
+            if not clone or not clone.Parent then return end
+            local alpha = (tick() - travelStart) / travelTime
+            alpha = math.clamp(alpha, 0, 1)
+
+            local currentPos = startCFrame.Position:Lerp(targetPos, alpha)
+            
+            -- Orientar o CFrame para onde ela está indo
+            if (targetPos - currentPos).Magnitude > 0.1 then
+                clone.CFrame = CFrame.new(currentPos, targetPos) * CFrame_Angles(math.pi/2, 0, 0)
+            else
+                clone.CFrame = CFrame.new(currentPos)
+            end
+
+            -- Esticar a mesh em forma de oval para a direção do movimento
+            local stretch = 1 + (math.sin(alpha * math.pi) * 1.8)
+            clone.Size = Vector3_new(baseSize.X * 0.7, baseSize.Y * (2.0 * stretch), baseSize.Z * 0.7)
+
+            -- Trail feita com Part meshes (pequenas esferas brilhantes deixadas para trás)
+            if math_random(1, 2) == 1 then
+                task.spawn(function()
+                    local trailPart = Instance.new("Part")
+                    trailPart.Shape = Enum.PartType.Ball
+                    trailPart.Size = Vector3_new(baseSize.X * 0.4, baseSize.Y * 0.4, baseSize.Z * 0.4)
+                    trailPart.CFrame = clone.CFrame
+                    trailPart.Anchored = true
+                    trailPart.CanCollide = false
+                    trailPart.CanQuery = false
+                    trailPart.Material = Enum.Material.Neon
+                    trailPart.Color = clone.Color
+                    trailPart.Transparency = 0.5
+                    trailPart.Parent = workspace
+
+                    local tTween = TweenService:Create(trailPart, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                        Transparency = 1,
+                        Size = Vector3_new(0.1, 0.1, 0.1)
+                    })
+                    tTween:Play()
+                    tTween.Completed:Connect(function()
+                        if trailPart and trailPart.Parent then trailPart:Destroy() end
+                    end)
+                end)
+            end
+
+            task.wait()
+        end
+
+        if clone and clone.Parent then
+            clone:Destroy()
+        end
     end)
 end
 
@@ -705,7 +741,6 @@ local function initCharacterAttachments()
         end
     end)
 
-    -- Head Mesh Part
     task.spawn(function()
         local head = char:WaitForChild("Head", 5)
         if head then
@@ -728,7 +763,6 @@ local function initCharacterAttachments()
         end
     end)
 
-    -- Neck Mesh Part
     task.spawn(function()
         local torso = char:WaitForChild("UpperTorso", 5) or char:WaitForChild("Torso", 5) or char:WaitForChild("Head", 5)
         if torso then
@@ -751,7 +785,6 @@ local function initCharacterAttachments()
         end
     end)
 
-    -- CubeOutline / Visualizer Weld
     task.spawn(function()
         local function setupVisualizerWeld()
             local invCube = char:WaitForChild("InvCube", 3) or workspace:WaitForChild("InvCube", 3) or char:WaitForChild("CubeOutline", 3) or workspace:WaitForChild("CubeOutline", 3)
@@ -1002,7 +1035,6 @@ LP.Chatted:Connect(function(msg)
 end)
 
 UIS.InputBegan:Connect(function(input, gpe)
-    -- 🌟 BLOQUEIO DE EQUIPAR ITENS PELAS TECLAS 2, 4, 5, 6 E 7
     local noEquipKeys = {
         [Enum.KeyCode.Two] = true, [Enum.KeyCode.KeypadTwo] = true,
         [Enum.KeyCode.Four] = true, [Enum.KeyCode.KeypadFour] = true,
@@ -1056,7 +1088,6 @@ UIS.InputBegan:Connect(function(input, gpe)
             end)
         end
     elseif input.KeyCode == Enum.KeyCode.Seven or input.KeyCode == Enum.KeyCode.KeypadSeven then
-        -- 🌟 TECLA 7: Recriação de partes exatamente como eram (com textura/mesh/cor/material) sem efeitos + Clear Table
         if #destroyedHistory > 0 then
             local restoredCount = #destroyedHistory
             for _, lastData in ipairs(destroyedHistory) do
