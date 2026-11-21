@@ -45,7 +45,7 @@ local ARM_OUT_VERTICAL_OFFSET = Vector3_new(0, -0.7, 0)
 local ARM_IN_CUSTOM_SIZE = Vector3_new(1.34, 1.34, 1.34)
 local ARM_OUT_CUSTOM_SIZE = Vector3_new(1.34, 1.34, 1.34)
 
-local KITSUNE_DECAL_TEXTURE = "rbxassetid://103863954861858"
+local KITSUNE_DECAL_TEXTURE = "rbxassetid://74566054518317"
 
 local Remote = nil
 local function getRemote()
