@@ -28,14 +28,14 @@ end
 -- 🌟 CONFIGURAÇÕES DA MESH NA CABEÇA (SEM COLISÃO) 🌟
 local HEAD_MESH_ID = "rbxassetid://18622481235"
 local HEAD_MESH_POS = Vector3_new(0, -0.2, 0.1)
-local HEAD_MESH_ROT = Vector3_new(-31, 45, 25)
+local HEAD_MESH_ROT = Vector3_new(-28, 45, 25)
 local HEAD_MESH_SIZE = Vector3_new(1.35, 1.06, 1.35)
 
 -- 🌟 CONFIGURAÇÕES DA MESH NO PESCOÇO (SEM COLISÃO) 🌟
 local NECK_MESH_ID = "rbxassetid://115354289962355"
 local NECK_MESH_POS = Vector3_new(0, 0.4, 0)
 local NECK_MESH_ROT = Vector3_new(0, -90, 0)
-local NECK_MESH_SIZE = Vector3_new(1, 1, 1)
+local NECK_MESH_SIZE = Vector3_new(1.2, 1.2, 1.2)
 
 -- 🌟 IDS E CONFIGURAÇÕES DE TAMANHO PARA ARM IN E ARM OUT 🌟
 local ARM_IN_MESH_ID = "rbxassetid://84777529052646"
@@ -968,7 +968,6 @@ UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
 
     if input.KeyCode == Enum.KeyCode.N then
-        sendNotification("Tecla N", "Ativada!")
         return
     end
 
